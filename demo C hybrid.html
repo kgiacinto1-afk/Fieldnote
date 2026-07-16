@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Demo C — Hybrid (CSS shelf + real page turns)</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito:wght@600;700;800&family=Caveat:wght@600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/page-flip/dist/js/page-flip.browser.js"></script>
+<style>
+  :root{--cream:#f9f2e1; --sage:#2e3f2b; --terracotta:#b35838; --gold:#c9a227; --rose:#8a5a68;}
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;background:var(--cream);font-family:'Nunito',sans-serif;overflow:hidden;}
+  .stage{position:fixed;inset:0;max-width:440px;margin:0 auto;
+    background:radial-gradient(1200px 800px at 50% -10%, #fffaf0 0%, transparent 60%),var(--cream);
+    perspective:1400px;}
+  .hint{position:absolute;top:14px;left:0;right:0;text-align:center;
+    font-family:'Caveat',cursive;font-size:16px;color:#8a7350;z-index:5;pointer-events:none;}
+
+  /* ---------- SHELF (vertical spines standing on a board) ---------- */
+  .shelf{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;
+    transition:opacity .25s ease;transform-style:preserve-3d;}
+  .shelf.hide{opacity:0;pointer-events:none;}
+  .shelfrow{display:flex;align-items:flex-end;gap:9px;padding:0 22px;transform-style:preserve-3d;}
+  .board{width:100%;max-width:396px;height:14px;margin:0 22px;border-radius:2px;
+    background:linear-gradient(#8a6a44,#4d3a24);box-shadow:0 8px 14px rgba(0,0,0,.3), inset 0 2px 0 rgba(255,255,255,.15);}
+  .spine{position:relative;width:56px;border-radius:7px 7px 3px 3px;cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;padding:14px 0 12px;
+    box-shadow:inset -3px 0 6px rgba(0,0,0,.25), inset 3px 0 0 rgba(255,255,255,.14), 0 6px 12px rgba(30,20,10,.3);
+    transform-style:preserve-3d;transform-origin:bottom center;
+    transition:transform .45s cubic-bezier(.2,.8,.2,1), box-shadow .45s ease;}
+  .spine::after{content:'';position:absolute;inset:0;border-radius:inherit;
+    background:repeating-linear-gradient(100deg, rgba(255,255,255,.05) 0 2px, transparent 2px 6px);pointer-events:none;}
+  .spine:active{transform:translateY(-4px) scale(1.02);}
+  .spine .ic{font-size:20px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.35));margin-bottom:8px;}
+  .spine .tx{writing-mode:vertical-rl;flex:1;display:flex;align-items:center;justify-content:center;}
+  .spine .tx b{font-family:'Fraunces',serif;font-size:14.5px;color:#fdf6e3;letter-spacing:.02em;}
+  .spine.pulling{transform:translateY(-120px) scale(1.08);
+    box-shadow:0 30px 50px rgba(0,0,0,.4);z-index:20;}
+
+  /* ---------- BOOK SHELL (same lift/scale as Demo A) ---------- */
+  .bookwrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    transform-style:preserve-3d;pointer-events:none;opacity:0;transition:opacity .1s;}
+  .bookwrap.on{opacity:1;pointer-events:auto;}
+  .book{position:relative;width:320px;height:460px;transform-style:preserve-3d;
+    transform:scale(.4) rotateY(-70deg);transition:transform .55s cubic-bezier(.2,.8,.2,1);}
+  .book.open-shelf{transform:scale(1) rotateY(0deg);}
+
+  /* the pageflip mount sits under the cover, only becomes interactive once revealed */
+  #flipmount{position:absolute;inset:0;border-radius:4px 10px 10px 4px;overflow:hidden;
+    box-shadow:0 20px 50px rgba(20,12,4,.4);}
+  .pf-page{background:#efe6cd;
+    background-image:repeating-linear-gradient(#efe6cd 0 27px, rgba(150,120,70,.08) 27px 28px);
+    padding:22px 18px;}
+  .pf-page h3{font-family:'Fraunces',serif;font-size:19px;color:#2e3f2b;margin:0 0 4px;}
+  .pf-page .sub{font-family:'Caveat',cursive;font-size:14px;color:#8a5a68;margin-bottom:12px;}
+  .pf-page .chap{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:8px;
+    background:rgba(255,255,255,.5);margin-bottom:7px;font-size:13.5px;color:#3a2f1c;font-weight:700;
+    border-left:3px solid var(--sage);}
+  .pf-page p.body{font-size:13.5px;line-height:1.5;color:#4a3f2c;}
+
+  .cover{position:absolute;inset:0;border-radius:4px 10px 10px 4px;transform-origin:left center;
+    transform-style:preserve-3d;transition:transform .6s cubic-bezier(.3,.7,.2,1);
+    box-shadow:0 22px 55px rgba(20,12,4,.45);z-index:5;}
+  .cover.opened{transform:rotateY(-155deg);}
+  .cover-face{position:absolute;inset:0;border-radius:inherit;backface-visibility:hidden;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+    color:#fdf6e3;text-align:center;padding:20px;}
+  .cover-face .cic{font-size:44px;}
+  .cover-face h2{font-family:'Fraunces',serif;font-size:24px;margin:6px 0 0;}
+  .cover-face p{font-family:'Caveat',cursive;font-size:15px;margin:2px 0 0;opacity:.85;}
+  .cover-back{position:absolute;inset:0;border-radius:inherit;background:#dcc79f;
+    transform:rotateY(180deg);backface-visibility:hidden;}
+
+  .backbtn{position:absolute;top:16px;left:16px;z-index:30;width:38px;height:38px;border-radius:50%;
+    background:rgba(255,255,255,.85);display:flex;align-items:center;justify-content:center;
+    font-size:18px;color:#2e3f2b;box-shadow:0 4px 10px rgba(0,0,0,.2);
+    opacity:0;pointer-events:none;transition:opacity .25s ease;}
+  .backbtn.on{opacity:1;pointer-events:auto;}
+
+  .modebadge{position:absolute;top:16px;right:16px;z-index:30;font-family:'Nunito',sans-serif;
+    font-size:10.5px;font-weight:800;padding:6px 10px;border-radius:20px;color:#fff;
+    opacity:0;pointer-events:none;transition:opacity .25s ease;}
+  .modebadge.on{opacity:1;}
+  .modebadge.live{background:#2e6b3f;}
+  .modebadge.fallback{background:#b35838;}
+  .nudge{position:absolute;bottom:14px;left:0;right:0;text-align:center;font-family:'Caveat',cursive;
+    font-size:15px;color:#8a7350;opacity:0;transition:opacity .3s ease;pointer-events:none;z-index:6;}
+  .nudge.on{opacity:1;}
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <div class="hint">tap a book, then drag a page corner to turn it</div>
+
+  <div class="shelf" id="shelf">
+    <div class="shelfrow">
+      <div class="spine" data-book="0" style="height:230px;background:linear-gradient(135deg,#2e4a2e,#1c331c)">
+        <div class="ic">&#127807;</div><div class="tx"><b>The Garden</b></div>
+      </div>
+      <div class="spine" data-book="1" style="height:210px;background:linear-gradient(135deg,#3f5a52,#2c413b)">
+        <div class="ic">&#127807;</div><div class="tx"><b>Herbs</b></div>
+      </div>
+      <div class="spine" data-book="2" style="height:246px;background:linear-gradient(135deg,#4a3a22,#372b19)">
+        <div class="ic">&#128211;</div><div class="tx"><b>Field Notes</b></div>
+      </div>
+    </div>
+    <div class="board"></div>
+  </div>
+
+  <div class="bookwrap" id="bookwrap">
+    <div class="book" id="book">
+      <div id="flipmount"></div>
+      <div class="cover" id="cover">
+        <div class="cover-face" id="coverface" style="background:linear-gradient(135deg,#2e4a2e,#1c331c)">
+          <div class="cic" id="cicon">&#127807;</div>
+          <h2 id="ctitle">Book title</h2>
+          <p id="ctag">tagline</p>
+        </div>
+        <div class="cover-back"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="backbtn" id="backbtn">&#8592;</div>
+  <div class="modebadge" id="modebadge">checking&hellip;</div>
+  <div class="nudge" id="nudge">try dragging the bottom-right corner</div>
+</div>
+
+<script>
+var BOOKS=[
+  {icon:'&#127807;',title:'The Garden',tag:'Vegetables & flowers, together',c1:'#2e4a2e',c2:'#1c331c',
+   chapters:[
+     {t:'Plant Now',d:'What to start this month',ic:'&#127793;'},
+     {t:'Watch For',d:'Problems to catch early',ic:'&#128269;'},
+     {t:'Harvest',d:'How to tell it is ready',ic:'&#127855;'},
+     {t:'Companions',d:'What grows well together',ic:'&#129309;'},
+     {t:'Watering',d:'How much and how often',ic:'&#128167;'}
+   ]},
+  {icon:'&#127807;',title:'Herbs',tag:'Culinary, medicinal, wild',c1:'#3f5a52',c2:'#2c413b',
+   chapters:[
+     {t:'The Herb Cabinet',d:'Every plant, by common ailment',ic:'&#127807;'},
+     {t:'Preparations',d:'Tea, tincture, oil, salve',ic:'&#127855;'},
+     {t:'Cautions',d:'What to avoid, and when',ic:'&#9888;'}
+   ]},
+  {icon:'&#128211;',title:'Field Notes',tag:'Your own garden journal',c1:'#4a3a22',c2:'#372b19',
+   chapters:[
+     {t:'My Beds',d:'Watering tracker',ic:'&#128167;'},
+     {t:'Plant Memory',d:'Variety, pest, and lesson log',ic:'&#128220;'},
+     {t:'Annual Journal',d:'Dated free-write entries',ic:'&#9998;'}
+   ]}
+];
+
+var shelf=document.getElementById('shelf');
+var bookwrap=document.getElementById('bookwrap');
+var book=document.getElementById('book');
+var cover=document.getElementById('cover');
+var backbtn=document.getElementById('backbtn');
+var flipmount=document.getElementById('flipmount');
+var modebadge=document.getElementById('modebadge');
+var nudge=document.getElementById('nudge');
+var pageFlip=null;
+
+function buildPages(chapters){
+  flipmount.innerHTML='';
+  chapters.forEach(function(c,i){
+    var p=document.createElement('div');
+    p.className='pf-page';
+    p.innerHTML='<h3>'+c.ic+' '+c.t+'</h3><div class="sub">chapter '+(i+1)+' of '+chapters.length+'</div>'
+      +'<p class="body">This is where the real chapter content would render &mdash; the same content '
+      +'already written for this chapter in the app. Drag the bottom corner to turn the page.</p>';
+    flipmount.appendChild(p);
+  });
+}
+
+function initFlip(chapters){
+  buildPages(chapters);
+  nudge.classList.remove('on');
+  modebadge.classList.remove('live','fallback');
+  modebadge.textContent='checking\u2026';
+  modebadge.classList.add('on');
+  try{
+    if(typeof St==='undefined'||!St.PageFlip) throw new Error('page-flip script did not load');
+    if(pageFlip){pageFlip.destroy();pageFlip=null;}
+    pageFlip=new St.PageFlip(flipmount,{
+      width:320, height:460, size:'stretch',
+      minWidth:200, maxWidth:600, minHeight:300, maxHeight:800,
+      maxShadowOpacity:0.4, showCover:false, mobileScrollSupport:false,
+      usePortrait:true
+    });
+    pageFlip.loadFromHTML(flipmount.querySelectorAll('.pf-page'));
+    modebadge.textContent='real page-turn: LIVE';
+    modebadge.classList.add('live');
+    // prove it to you: flip forward then back on its own, then hand control over
+    setTimeout(function(){
+      pageFlip.flipNext();
+      setTimeout(function(){
+        pageFlip.flipPrev();
+        nudge.classList.add('on');
+        setTimeout(function(){nudge.classList.remove('on');},2600);
+      },1000);
+    },500);
+  }catch(err){
+    // fallback if the library did not load (e.g. no internet reaching unpkg.com): tap to advance
+    console.warn('page-flip unavailable, falling back to tap-to-advance', err);
+    modebadge.textContent='LIBRARY DID NOT LOAD \u2014 fallback';
+    modebadge.classList.add('fallback');
+    var pages=flipmount.querySelectorAll('.pf-page');
+    var cur=0;
+    pages.forEach(function(p,i){p.style.display=i===0?'block':'none';});
+    flipmount.onclick=function(){
+      pages[cur].style.display='none';
+      cur=(cur+1)%pages.length;
+      pages[cur].style.display='block';
+    };
+  }
+}
+
+document.querySelectorAll('.spine').forEach(function(el){
+  el.addEventListener('click',function(){
+    var idx=+el.getAttribute('data-book');
+    var b=BOOKS[idx];
+    document.getElementById('ctitle').textContent=b.title;
+    document.getElementById('ctag').textContent=b.tag;
+    document.getElementById('cicon').innerHTML=b.icon;
+    document.getElementById('coverface').style.background='linear-gradient(135deg,'+b.c1+','+b.c2+')';
+
+    el.classList.add('pulling');
+    setTimeout(function(){
+      shelf.classList.add('hide');
+      bookwrap.classList.add('on');
+      requestAnimationFrame(function(){
+        book.classList.add('open-shelf');
+        setTimeout(function(){
+          initFlip(b.chapters);
+          cover.classList.add('opened');
+          backbtn.classList.add('on');
+        },420);
+      });
+    },380);
+  });
+});
+
+backbtn.addEventListener('click',function(){
+  cover.classList.remove('opened');
+  backbtn.classList.remove('on');
+  modebadge.classList.remove('on');
+  nudge.classList.remove('on');
+  setTimeout(function(){
+    book.classList.remove('open-shelf');
+    setTimeout(function(){
+      bookwrap.classList.remove('on');
+      shelf.classList.remove('hide');
+      document.querySelectorAll('.spine').forEach(function(s){s.classList.remove('pulling');});
+    },380);
+  },350);
+});
+</script>
+</body>
+</html>
